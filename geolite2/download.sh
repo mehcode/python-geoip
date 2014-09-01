@@ -2,7 +2,7 @@
 
 cd _geoip_geolite2
 rm *.mmdb
-wget http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.mmdb.gz
+curl --output GeoLite2-City.mmdb.gz http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.mmdb.gz
 gunzip "GeoLite2-City.mmdb.gz"
 cd ..
 
