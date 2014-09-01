@@ -4,3 +4,4 @@ build
 *.egg-info
 *.mmdb
 docs/_build
+.idea/
