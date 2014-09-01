@@ -1,6 +1,5 @@
 import sys
 import mmap
-import socket
 import urllib
 
 from threading import Lock
@@ -25,19 +24,19 @@ def _native_str(x):
         return x
 
 
-def pack_ip(ip):
+def pack_ip(ip6or4):
     """Given an IP string, converts it into packed format for internal
     usage.
     """
-    for fmly in socket.AF_INET, socket.AF_INET6:
-        try:
-            return socket.inet_pton(fmly, ip)
-        except socket.error:
-            continue
-    raise ValueError('Malformed IP address')
+    quadrants = ip6or4.split('.')
+    if len(quadrants) == 4:
+        packed = tuple((int(quad) for quad in quadrants))
+        return packed
+    raise ValueError('Malformed IP address: "%s"' % ip6or4)
 
 
 class DatabaseInfo(object):
+
     """Provides information about the GeoIP database."""
 
     def __init__(self, filename=None, date=None,
@@ -62,6 +61,7 @@ class DatabaseInfo(object):
 
 
 class IPInfo(object):
+
     """Provides information about the located IP as returned by
     :meth:`Database.lookup`.
     """
@@ -136,8 +136,9 @@ class IPInfo(object):
         return not self.__eq__(other)
 
     def __repr__(self):
-        return ('<IPInfo ip=%r country=%r continent=%r '
-                'subdivisions=%r timezone=%r location=%r>') % (
+        return (
+            '<IPInfo ip=%r country=%r continent=%r '
+            'subdivisions=%r timezone=%r location=%r>') % (
             self.ip,
             self.country,
             self.continent,
@@ -148,6 +149,7 @@ class IPInfo(object):
 
 
 class Database(object):
+
     """Provides access to a GeoIP database.  This is an abstract class
     that is implemented by different providers.  The :func:`open_database`
     function can be used to open a MaxMind database.
@@ -214,6 +216,7 @@ class Database(object):
 
 
 class MaxMindDatabase(Database):
+
     """Provides access to a maxmind database."""
 
     def __init__(self, filename, buf, md):
@@ -255,10 +258,7 @@ class MaxMindDatabase(Database):
         for i in range(bits):
             if node >= self.nodes:
                 break
-            try:
-                bit = (packed_addr[i >> 3]) >> (7 - (i % 8)) & 1
-            except TypeError:
-                bit = (ord(packed_addr[i >> 3]) >> (7 - (i % 8))) & 1
+            bit = (packed_addr[i >> 3]) >> (7 - (i % 8)) & 1
             node = self._parse_node(node, bit)
             if node in seen:
                 raise LookupError('Circle in tree detected')
@@ -300,10 +300,7 @@ class MaxMindDatabase(Database):
             else:
                 b = (0xF0 & b) >> 4
             offset += index * 4
-            try:
-                bytes_read = chr(b) + self._buf[offset:offset + 3]
-            except TypeError:
-                bytes_read = bytes([b]) + self._buf[offset:offset + 3]
+            bytes_read = chr(b) + self._buf[offset:offset + 3]
         elif self.record_size == 32:
             offset += index * 4
             bytes_read = self._buf[offset:offset + 4]
@@ -319,6 +316,7 @@ class MaxMindDatabase(Database):
 
 
 class PackagedDatabase(Database):
+
     """Provides access to a packaged database.  Upon first usage the
     system will import the provided package and invoke the ``loader``
     function to construct the actual database object.
@@ -394,6 +392,7 @@ def _read_mmdb_metadata(buf):
 
 def make_struct_parser(code):
     struct = Struct('>' + code)
+
     def unpack_func(self, size, offset):
         new_offset = offset + struct.size
         bytes_read = self._buf[offset:new_offset].rjust(struct.size, b'\x00')
@@ -412,11 +411,7 @@ class _MaxMindParser(object):
         ptr_size = ((size >> 3) & 0x3) + 1
         bytes_read = self._buf[offset:offset + ptr_size]
         if ptr_size != 4:
-            try:
-                bytes_read = chr(size & 0x7) + bytes_read
-            except TypeError:
-                bytes_read = bytes([size & 0x7]) + bytes_read
-
+            bytes_read = chr(size & 0x7) + bytes_read
         ptr = (
             _int_unpack(bytes_read.rjust(4, b'\x00'))[0] +
             self._data_offset +
